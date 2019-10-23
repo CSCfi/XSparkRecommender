@@ -5,3 +5,9 @@
 .settings
 
 target
+
+.idea
+
+*.iml
+
+bin
