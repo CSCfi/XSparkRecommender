@@ -31,15 +31,18 @@ public class SparkApp
 {
     public static void main( String[] args ) throws InterruptedException
     {
-       
 
     	SparkConf sparkConf = new SparkConf().setAppName("Recommender System");
 
+    	//Dev
+    	/*
     	sparkConf.setMaster("local[*]");
     	sparkConf.set("spark.driver.host", "localhost");
-    	sparkConf.set("spark.mongodb.input.uri", "mongodb://127.0.0.1/sampledb.test");
-        sparkConf.set("spark.mongodb.output.uri", "mongodb://127.0.0.1/sampledb.test");
-
+    	*/
+    	
+    	sparkConf.set("spark.mongodb.input.uri",AppConstants.mongoURI);
+        sparkConf.set("spark.mongodb.output.uri", AppConstants.mongoURI);
+        
     	
     	SparkSession spark = SparkSession.builder().config(sparkConf).getOrCreate();
     	spark.sparkContext().setLogLevel("ERROR");

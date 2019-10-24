@@ -17,6 +17,7 @@ import org.apache.spark.streaming.kafka010.ConsumerStrategies;
 import org.apache.spark.streaming.kafka010.KafkaUtils;
 import org.apache.spark.streaming.kafka010.LocationStrategies;
 
+import fi.csc.spark.recommender.AppConstants;
 import fi.csc.spark.recommender.models.MovieRating;
 import fi.csc.spark.recommender.utils.SparkMovieUtils;
 import scala.Tuple13;
@@ -27,12 +28,10 @@ public class KafkaMovieConsumer {
 
 	
 	
-	
-	Long mes = new Long(1);
 	public void consume(JavaStreamingContext streamingContext) throws InterruptedException {
 	
 		Map<String, Object> kafkaParams = new HashMap<String, Object>();
-		kafkaParams.put("bootstrap.servers", "localhost:9092");
+		kafkaParams.put("bootstrap.servers", AppConstants.kafkabroker);
 		kafkaParams.put("key.deserializer", LongDeserializer.class);
 		kafkaParams.put("value.deserializer", StringDeserializer.class);
 		kafkaParams.put("group.id", "movielens");
