@@ -34,11 +34,11 @@ public class SparkApp
 
     	SparkConf sparkConf = new SparkConf().setAppName("Recommender System");
 
-    	//Dev
-    	/*
-    	sparkConf.setMaster("local[*]");
-    	sparkConf.set("spark.driver.host", "localhost");
-    	*/
+//    	//Dev
+//    	
+//    	sparkConf.setMaster("local[*]");
+//    	sparkConf.set("spark.driver.host", "localhost");
+//    	
     	
     	sparkConf.set("spark.mongodb.input.uri",AppConstants.mongoURI);
         sparkConf.set("spark.mongodb.output.uri", AppConstants.mongoURI);
@@ -59,14 +59,14 @@ public class SparkApp
     	System.out.println(movies.size());
     	
     	Broadcast<Map<Integer,String>> movieBroadcast = SparkUtils.getJsc().broadcast(movies);
-    	SparkMovieUtils.setMovieBroadcast(movieBroadcast);
+    	//SparkMovieUtils.setMovieBroadcast(movieBroadcast); 
     	
     	int mins = 1;
     	JavaStreamingContext ssc = new JavaStreamingContext(SparkUtils.getJsc(), new Duration(mins * 60 * 1000));
     	
     	KafkaMovieConsumer kfc = new KafkaMovieConsumer();
     	
-    	kfc.consume(ssc);
+    	kfc.consume(ssc, movieBroadcast);
     	
     	
     	

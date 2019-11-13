@@ -1,12 +1,7 @@
 package fi.csc.spark.recommender.utils;
 
-import java.io.BufferedWriter;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.ListIterator;
 import java.util.Map;
 
 import org.apache.spark.api.java.JavaRDD;
@@ -17,20 +12,15 @@ import org.apache.spark.ml.recommendation.ALSModel;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.Row;
-import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema;
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
+
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.mongodb.spark.MongoSpark;
 
-import fi.csc.spark.recommender.models.Movie;
 import fi.csc.spark.recommender.models.MovieRating;
 import fi.csc.spark.recommender.models.MovieRecommendations;
-import scala.Array;
-import scala.Tuple3;
 import scala.collection.Iterator;
 import scala.collection.mutable.WrappedArray;
 
@@ -39,15 +29,6 @@ public final class SparkMovieUtils {
 	
 	private static ALS als;
 
-	private static Broadcast<Map<Integer,String>> movieBroadcast;
-	
-	public static Broadcast<Map<Integer, String>> getMovieBroadcast() {
-		return movieBroadcast;
-	}
-
-	public static void setMovieBroadcast(Broadcast<Map<Integer, String>> movieBroadcast) {
-		SparkMovieUtils.movieBroadcast = movieBroadcast;
-	}
 
 	public static ALS getALS() {
 		return als;
@@ -89,10 +70,11 @@ public final class SparkMovieUtils {
 	}
 
 	
-	public static MovieRecommendations transformMovieIdsToNames(Row row) {
+	public static MovieRecommendations transformMovieIdsToNames(Row row, Broadcast<Map<Integer,String>> movieBroadcast) {
 		
 		List<String> recommendationNames = new ArrayList<String>();
-		Map<Integer,String> movieNames = SparkMovieUtils.getMovieBroadcast().getValue();
+		//Map<Integer,String> movieNames = SparkMovieUtils.getMovieBroadcast().getValue();
+		Map<Integer,String> movieNames = movieBroadcast.getValue();
 		
 		Integer userId = (Integer)row.getAs("userId");
 		@SuppressWarnings("unchecked")
@@ -101,54 +83,57 @@ public final class SparkMovieUtils {
 		
 		
 		Iterator<GenericRowWithSchema> it = recommendationIDs.iterator();
-		int take = 0;
 		while(it.hasNext()) {
 			GenericRowWithSchema id_score  = it.next();
 			recommendationNames.add(movieNames.get(id_score.get(0)));
-			//if(take>10)
-			//	break;
-			//take++;
 		}
 		return new MovieRecommendations(userId, recommendationNames);
 		
 	}
 	
-	public static void mainFun(JavaRDD<MovieRating> rdd) {
+	public static void mainFun(JavaRDD<MovieRating> rdd, Broadcast<Map<Integer,String>> movieBroadcast) {
 
 		Dataset<Row> newRatingsDFRow = SparkUtils.getSparkSession().createDataFrame(rdd, MovieRating.class);
 		Dataset<MovieRating> newRatingsDF = newRatingsDFRow.as(Encoders.bean(MovieRating.class));
 		
 		newRatingsDF.show();
+		
+		//if(newRatingsDF.count() >0) {
 				
-		Dataset<MovieRating> originalRatingsDF = MongoSpark.load(SparkUtils.getSparkSession(), SparkMongoUtils.getRatingsReadConfig(), MovieRating.class);
+			Dataset<MovieRating> originalRatingsDF = MongoSpark.load(SparkUtils.getSparkSession(), SparkMongoUtils.getRatingsReadConfig(), MovieRating.class);
 
-		originalRatingsDF.show(10);
+			originalRatingsDF.show(10);
 		
-		Dataset<MovieRating> finalRatingsDF = newRatingsDF.union(originalRatingsDF);
+			Dataset<MovieRating> finalRatingsDF = newRatingsDF.union(originalRatingsDF);
 
-		finalRatingsDF.show(10);
-		ALSModel model = SparkMovieUtils.als.fit(finalRatingsDF);
-
-		model.setColdStartStrategy("drop");
-
-
-		Dataset<Row> usersDF = newRatingsDF.select("userId").distinct();
-		Dataset<Row> usersRawRecommendations = model.recommendForUserSubset(usersDF, 10);
+			finalRatingsDF.show(10);
 		
-		usersRawRecommendations.show();
+			//finalRatingsDF.cache();
+			ALSModel model = SparkMovieUtils.als.fit(finalRatingsDF);
+			model.setColdStartStrategy("drop");
+
+
+			Dataset<Row> usersDF = newRatingsDF.select("userId").distinct();
+			Dataset<Row> usersRawRecommendations = model.recommendForUserSubset(usersDF, 50);
 		
+			//usersRawRecommendations.show();
 		
-		Dataset<MovieRecommendations> usersRecommendations = usersRawRecommendations.map(
-				(MapFunction<Row, MovieRecommendations>) row -> transformMovieIdsToNames(row), 
+			Dataset<MovieRecommendations> usersRecommendations = usersRawRecommendations.map(
+				(MapFunction<Row, MovieRecommendations>) row -> transformMovieIdsToNames(row, movieBroadcast), 
 				Encoders.bean(MovieRecommendations.class));
 		
-		//System.out.println(usersRecommendations.collect());
-		usersRecommendations.show(10);
-    	//MongoSpark.save(usersRecommendations, SparkMongoUtils.getTestWriteConfig());
-		//MongoSpark.save(usersRecommendations.write().option("collection", "test").mode("overwrite");
-    	MongoSpark.save(usersRecommendations.write().mode("overwrite"), SparkMongoUtils.getTestWriteConfig());
-    	System.out.println("Wrote the recommendations in MongoDB, now running the next round of spark streaming");
-
+		
+			//usersRecommendations.show();
+			//finalRatingsDF.unpersist();
+			System.out.println("writing in mongo");
+			//MongoSpark.save(usersRecommendations, SparkMongoUtils.getTestWriteConfig());
+			//MongoSpark.save(usersRecommendations.write().option("collection", "test").mode("overwrite");
+			MongoSpark.save(usersRecommendations.write().mode("overwrite"), SparkMongoUtils.getTestWriteConfig());
+			System.out.println("Wrote the recommendations in MongoDB, now running the next round of spark streaming");
+		//}
+		//else {
+		//	System.out.println("Empty run");
+		//}
 		 
 	}
 

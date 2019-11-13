@@ -8,6 +8,8 @@ import java.util.Map;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.spark.broadcast.Broadcast;
+import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.streaming.api.java.JavaDStream;
 import org.apache.spark.streaming.api.java.JavaInputDStream;
@@ -17,9 +19,13 @@ import org.apache.spark.streaming.kafka010.ConsumerStrategies;
 import org.apache.spark.streaming.kafka010.KafkaUtils;
 import org.apache.spark.streaming.kafka010.LocationStrategies;
 
+import com.mongodb.spark.MongoSpark;
+
 import fi.csc.spark.recommender.AppConstants;
 import fi.csc.spark.recommender.models.MovieRating;
+import fi.csc.spark.recommender.utils.SparkMongoUtils;
 import fi.csc.spark.recommender.utils.SparkMovieUtils;
+import fi.csc.spark.recommender.utils.SparkUtils;
 import scala.Tuple13;
 import scala.Tuple2;
 import scala.Tuple3;
@@ -28,8 +34,9 @@ public class KafkaMovieConsumer {
 
 	
 	
-	public void consume(JavaStreamingContext streamingContext) throws InterruptedException {
+	public void consume(JavaStreamingContext streamingContext, Broadcast<Map<Integer,String>> movieBroadcast) throws InterruptedException {
 	
+		System.out.println("Consuming again");
 		Map<String, Object> kafkaParams = new HashMap<String, Object>();
 		kafkaParams.put("bootstrap.servers", AppConstants.kafkabroker);
 		kafkaParams.put("key.deserializer", LongDeserializer.class);
@@ -54,11 +61,12 @@ public class KafkaMovieConsumer {
 		
 		rawStream.print();
 		
-		JavaDStream<MovieRating> rowStream = rawStream.map(jsonString -> SparkMovieUtils.getMovieRatingRecord(jsonString));
 		
-		//rowStream.print();
+			JavaDStream<MovieRating> rowStream = rawStream.map(jsonString -> SparkMovieUtils.getMovieRatingRecord(jsonString));
 		
-		rowStream.foreachRDD(rdd-> SparkMovieUtils.mainFun(rdd));
+			//rowStream.print();
+						
+			rowStream.foreachRDD(rdd-> SparkMovieUtils.mainFun(rdd, movieBroadcast));
 		
 		streamingContext.start();
 		System.out.println("Started Spark Streaming");
