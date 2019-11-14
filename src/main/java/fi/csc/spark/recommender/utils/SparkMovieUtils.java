@@ -108,7 +108,7 @@ public final class SparkMovieUtils {
 
 			finalRatingsDF.show(10);
 		
-			//finalRatingsDF.cache();
+			finalRatingsDF.cache();
 			ALSModel model = SparkMovieUtils.als.fit(finalRatingsDF);
 			model.setColdStartStrategy("drop");
 
@@ -124,7 +124,7 @@ public final class SparkMovieUtils {
 		
 		
 			//usersRecommendations.show();
-			//finalRatingsDF.unpersist();
+			finalRatingsDF.unpersist();
 			System.out.println("writing in mongo");
 			//MongoSpark.save(usersRecommendations, SparkMongoUtils.getTestWriteConfig());
 			//MongoSpark.save(usersRecommendations.write().option("collection", "test").mode("overwrite");
